@@ -1,0 +1,14 @@
+﻿<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%%ROLE%% dashboard · Centrix City</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head>
+<body class="workspace">
+<aside class="sidebar">
+  <a class="brand" href="/"><b aria-hidden="true">C</b>CENTRIX CITY</a>
+  <nav aria-label="Workspace"><p class="eyebrow">%%ROLE%% PORTAL</p><a href="#overview" id="overview-link">Overview</a><a id="active-link" href="/property-manager/tasks" hidden>Requests</a><a class="manager-link" href="/property-manager/appointments" hidden>Appointments</a><a class="manager-link" href="/property-manager/craftsmen" hidden>Craftsmen</a></nav>
+  <div class="account-box"><strong>%%ACCOUNT%%</strong><small>%%ROLE%%</small><form action="/demo/logout" method="post"><button class="quiet">Switch account</button></form></div>
+</aside>
+<header class="workspace-bar"><span>%%ROLE%% workspace</span><div class="actions"><div class="notification-menu"><button class="quiet" id="notification-link" aria-expanded="false" aria-controls="notifications">Notifications</button><section class="notification-panel" id="notifications" aria-label="Notifications" aria-live="polite" hidden></section></div><button id="reset" class="quiet">Reset demo</button><form class="search-logout" action="/demo/logout" method="post"><button class="quiet">Switch account</button></form></div></header>
+<main class="dashboard" id="overview">
+  <section class="dashboard-title"><p class="muted">%%ROLE%% overview</p><h1>%%ACCOUNT%%</h1></section>
+  <section id="case" aria-label="%%ROLE%% maintenance workflow"><p id="error" role="alert" hidden></p><div id="panel" tabindex="-1"><p>Loading demo…</p></div></section>
+</main>
+</body></html>

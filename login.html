@@ -1,0 +1,24 @@
+﻿<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%%ROLE%% sign-in · Centrix City</title><link rel="stylesheet" href="/style.css"></head>
+<body class="signin">
+<main class="signin-main">
+  <a class="brand" href="/"><b aria-hidden="true">C</b>CENTRIX CITY</a>
+  <section class="signin-form">
+    <a class="back" href="/" aria-label="Back to role selection">← Back to role selection</a>
+    <p class="eyebrow">%%ROLE%% PORTAL</p><h1>%%ROLE%% Login</h1><p class="muted">Sign in to your workspace or explore with a demo account.</p>
+    <p class="signin-status" role="status">%%STATUS%%</p>
+    <form action="/demo/login" method="post">
+      <input type="hidden" name="role" value="%%KEY%%">
+      <label>Email<input type="email" name="email" autocomplete="username" maxlength="160" required></label>
+      <label>Password<input type="password" name="password" autocomplete="current-password" maxlength="128" required></label>
+      <button class="primary">Login</button>
+    </form>
+    <form action="/demo/login" method="post">
+      <input type="hidden" name="role" value="%%KEY%%">
+      <button class="quiet" name="mode" value="demo">Continue as %%DEMO_LABEL%%</button>
+    </form>
+    %%OPTIONS%%
+  </section>
+</main>
+<aside class="signin-aside"><div><span class="role-icon" aria-hidden="true">✓</span><h2>One shared maintenance workflow.</h2><p>From the first report to the final invoice.</p></div></aside>
+</body></html>
