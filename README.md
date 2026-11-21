@@ -17,7 +17,7 @@ Cases, portfolio data, accounts and sessions persist in demo.sqlite next to the 
 ## Accounts and action alerts
 
 - Demo sign-in creates an expiring server-side session for a seeded account. Email and password sign-in uses a salted password hash. Logout revokes the session.
-- Tenants may register and sign in. New tenant accounts have no unit assignment and cannot access Lena's demo case. Use **Continue as Demo Tenant** for the full repair walkthrough.
+- Tenants may register and sign in. A manager assigns each new tenant a vacant unit from the portfolio. The tenant can then report repairs for that unit. Use **Continue as Demo Tenant** for the full repair walkthrough.
 - For manager email-and-password sign-in, set CENTRIX_MANAGER_EMAIL and CENTRIX_MANAGER_PASSWORD before the first startup with that email. The app provisions the account with the seeded portfolio. The manager demo button works without this configuration.
 - A craftsman registers with an email and password. Manager approval is required before first sign-in. Demo provider buttons are limited to seeded identities.
 - The notification panel shows current actions across the signed-in account's cases and checks for updates every five seconds while the dashboard is visible. Each demo tenant can report multiple heating issues. Older example tasks are read-only.
@@ -25,6 +25,10 @@ Cases, portfolio data, accounts and sessions persist in demo.sqlite next to the 
 - Choose **More demo craftsmen** to sign in as Müller Heiztechnik, WärmeFix GmbH, or ThermoService. The selected provider sees the job after the manager assigns it.
 
 ## Four-minute walkthrough
+
+Open the same local URL in three separate browser profiles or browsers. For example, use Chrome for Lena Hoffmann, Edge for the Demo Property Manager, and a Chrome Incognito window for Müller Heiztechnik. Tabs in the same profile share a sign-in cookie. Keep the tenant's report or My repairs screen, the manager's Requests screen, and the craftsman's Jobs screen open. A dashboard checks for updates when you return to it and every five seconds while visible. Use a freshly extracted repository ZIP and start it with Node.js 24 or later before rehearsing.
+
+Pitch: Centrix already knows the unit when a resident reports a cold home. The manager assigns a specialist, and the appointment, repair and invoice return to that same unit.
 
 Use **Switch account** between dashboards. It signs you out and returns you to the account choices with the case intact.
 
@@ -34,7 +38,7 @@ Use **Switch account** between dashboards. It signs you out and returns you to t
 4. Sign in as **Müller Heiztechnik**, expand the property and contact details, accept the job, and enter two Berlin-time appointment starts at least one hour apart.
 5. Sign in as **Lena Hoffmann** and confirm the morning slot.
 6. Sign in as **Müller Heiztechnik**, submit the completion report, and pause on **Task completed — invoice pending**. Upload a PDF, PNG or JPEG up to 2 MB, then submit the separate invoice. The manager and tenant can download it after submission.
-7. Sign in as **Lena Hoffmann** and expand the simulated Unit 4B write-back. Show the linked job, appointment, report and invoice.
+7. Sign in as **Lena Hoffmann** and open the readable Unit 4B maintenance record. Show the linked job, appointment, report and invoice.
 
 For a rejection walkthrough, choose the replacement under **More demo craftsmen** once the manager assigns the replacement.
 
@@ -42,8 +46,12 @@ To demonstrate onboarding, choose **Craftsman → Register** and submit a fictio
 
 ## Checks
 
-Run `node --test workflow.test.cjs` for state and consent checks. With the server running, `node browser-smoke.cjs` runs the complete journey and resets the shared demo state. The optional browser check requires Playwright available on NODE_PATH or installed locally. Set DEMO_BROWSER to a local Chromium executable if needed.
+Run `node --test workflow.test.cjs` for workflow, eligibility, scheduling and invoice checks. With the server running, `node browser-smoke.cjs` runs the complete journey and resets the shared demo state. The optional browser check requires Playwright available on NODE_PATH or installed locally. Set DEMO_BROWSER to a local Chromium executable if needed.
 
 See [CONNECTOR_SPEC.md](CONNECTOR_SPEC.md) for the simulated integration contract.
 
+## Voice report demo
 
+On the tenant report screen, select the microphone icon, allow browser microphone access, and say “The bedroom radiator is cold, and I’m only home after four.” The transcript goes into the ordinary report box for review. Continue to see the room and 16:00 Berlin-time preference. If the issue is unclear, the portal reads one follow-up aloud where speech playback is supported. Select the microphone icon beside the answer to dictate a reply. Typing remains available.
+
+The craftsman sees the confirmed room and preferred start time. After accepting, **Suggest matching times** fills two editable future options. The tenant still chooses the appointment in the portal. The app stores text and structured details, while the browser may use an online service to transcribe audio. Dictation uses English.

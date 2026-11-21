@@ -9,7 +9,7 @@ exports.tenants = { tenant: {...context, propertyId:'aachen-12'}, maya:{...conte
 exports.trigger = (description, tenant = context, id = '001') => ({
   schema_version: '1.0', event_id: 'evt_heating_' + id,
   event: 'maintenance.issue_reported', source: 'centrix_mock',
-  occurred_at: '2026-11-20T09:14:00Z',
+  occurred_at: new Date().toISOString(),
   unit_id: tenant.unit_id, contact_id: tenant.contact_id,
   data: { issue_channel: 'tenant_portal', initial_description: description }
 });

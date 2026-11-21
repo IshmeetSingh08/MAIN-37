@@ -3,7 +3,7 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
-const { fresh, apply, view } = require('./workflow.cjs');
+const { fresh, apply, view, safeTitle } = require('./workflow.cjs');
 const { accounts } = require('./accounts.cjs');
 const { providerName, rankProviders } = require('./partner.cjs');
 const { tenants } = require('./centrix.cjs');
@@ -50,11 +50,22 @@ async function readBody(request) {
 }
 function partnerOwnsJob(state, session) {
   const attempt = state.attempts.at(-1);
-  return attempt?.job && attempt.provider.id === session.providerId;
+  return !['clarification','review','unavailable'].includes(state.stage) && attempt?.job && attempt.provider.id === session.providerId;
+}
+const unitCatalog = portfolio().flatMap(property => Array.from({length: property.units}, (_, i) => {
+  const label = property.id === 'aachen-12' ? 'Unit 4B' : 'Unit ' + (i + 1);
+  return {unit_id:property.id + '_' + (i + 1),unit_label:label,propertyId:property.id,address:property.address,heating:property.heating};
+})).filter(unit => !Object.values(tenants).some(t => t.propertyId === unit.propertyId && t.unit_label === unit.unit_label));
+const registeredTenants = db.prepare("SELECT id,name,email FROM accounts WHERE role='tenant' AND demo=0 ORDER BY name");
+const ownerKey = session => session.demo ? session.id.slice(5) : session.id;
+function tenantContext(state,session) {
+  if (session.demo) return tenants[ownerKey(session)];
+  const unit = unitCatalog.find(unit => unit.unit_id === state.assignments?.[session.id]);
+  return unit && {...unit,name:session.name,contact_id:'resident_' + session.id};
 }
 function visibleCases(state,session) {
   return state.cases.filter(item => session.role==='pm' ? Boolean(item.request) :
-    session.role==='tenant' ? session.demo && item.owner===session.id.slice(5) : partnerOwnsJob(item,session));
+    session.role==='tenant' ? item.owner===ownerKey(session) : partnerOwnsJob(item,session));
 }
 function selectedCase(state, session, url) {
   const cases = visibleCases(state,session);
@@ -64,11 +75,15 @@ function selectedCase(state, session, url) {
   return session.role==='tenant'?cases.filter(item=>item.request).at(-1):cases.at(-1);
 }
 function sessionView(state, session, url, selected = selectedCase(state,session,url)) {
-  if (session.role === 'tenant' && !session.demo) {
-    return { role: 'tenant', stage: 'unassigned', revision: state.revision, demo: false };
+  if (session.role === 'tenant' && !tenantContext(state,session)) {
+    return { role: 'tenant', accountKey:session.id, stage: 'unassigned', revision: state.revision, demo: false };
   }
   const cases = visibleCases(state,session).filter(item=>item.request).map(item=>({
-    id:item.id, title:item.trigger.data.initial_description, stage:item.stage, appointment:item.appointment,
+    id:item.id, title:session.role === 'partner' ? safeTitle(item) : item.trigger.data.initial_description, stage:item.stage, appointment:item.appointment,
+    issueLabel:item.summary?.category === 'heating' ? ({
+      'Single radiator not warming':'Radiator not warming',
+      'Possible heating controls or boiler issue':'Boiler or thermostat issue'
+    }[safeTitle(item)] ?? 'Heating problem') : 'Maintenance issue',
     propertyId:item.context.propertyId, address:item.context.address, unit:item.context.unit_label
   }));
   const role = session.role;
@@ -80,9 +95,11 @@ function sessionView(state, session, url, selected = selectedCase(state,session,
     }
   }
   return {
-    ...view(selected ?? fresh(), role), role, demo: Boolean(session.demo), revision:state.revision,
+    ...view(selected ?? {...fresh(),context:role === 'tenant' ? tenantContext(state,session) : undefined}, role), accountKey:session.id, role, demo: Boolean(session.demo), revision:state.revision,
     caseId:selected?.id, caseRevision:selected?.revision, cases,
     ...(role === 'pm' ? { registrations: state.registrations, properties: portfolio(),
+      unassignedTenants:registeredTenants.all().filter(t=>!state.assignments?.[t.id]),
+      availableUnits:unitCatalog.filter(unit=>!Object.values(state.assignments ?? {}).includes(unit.unit_id)),
       providers:rankProviders('heating_repair',null,reviews),
       ...(selected?.summary ? {recommendations:rankProviders(selected.summary.required_specialisation,selected.summary.problem_type,reviews)} : {})
     } : {})
@@ -153,7 +170,14 @@ const server = createServer(async (req, res) => {
       if (auth.byEmail(email)) return redirect(loginPath + 'exists');
       const id = randomUUID();
       if (role === 'tenant') {
-        auth.register(id, email, name, role, password);
+        db.exec('BEGIN');
+        try {
+          auth.register(id, email, name, role, password);
+          const state = current();
+          state.revision++;
+          save.run(JSON.stringify(state));
+          db.exec('COMMIT');
+        } catch (error) { db.exec('ROLLBACK'); throw error; }
         return redirect(loginPath + 'created');
       }
       const state = current();
@@ -240,16 +264,28 @@ const server = createServer(async (req, res) => {
       return send(400, { error: 'Invalid request.' });
     }
     if (!body || typeof body.action !== 'string') return send(400, { error: 'Invalid request.' });
-    if (session.role === 'tenant' && !session.demo) return send(403, { error: 'This account has no assigned unit.' });
     const previous = current();
+    if (session.role === 'tenant' && !tenantContext(previous,session)) return send(403, { error: 'This account has no assigned unit.' });
     let selected = selectedCase(previous,session,url);
-    const sameDraft = body.action==='answer' && session.role==='tenant' && selected?.stage==='intake'
-      && selected.id===body.caseId && selected.revision===body.caseRevision;
-    if (body.revision !== previous.revision && !sameDraft) return send(409, { error: 'The case changed. Review the latest state.' });
+    const globalAction = ['reset','approve','assignUnit'].includes(body.action);
+    const newDraft = body.action === 'trigger' && !selected && !body.caseId && !url.searchParams.has('case');
+    const sameCase = selected && selected.id === body.caseId && selected.revision === body.caseRevision;
+    if (globalAction ? body.revision !== previous.revision : !(sameCase || newDraft)) {
+      return send(409, { error: 'This repair changed. Review the latest details before trying again.' });
+    }
     if (body.action === 'reset') {
       if (!session.demo) return send(403, { error: 'Only a demo account can reset the repair.' });
       previous.cases = [];
       selected = undefined;
+    } else if (body.action === 'assignUnit') {
+      if (session.role !== 'pm') return send(403,{error:'Manager access required.'});
+      const {tenantId,unitId} = body.value ?? {};
+      previous.assignments ??= {};
+      if (!registeredTenants.all().some(t=>t.id===tenantId) || previous.assignments[tenantId] ||
+          !unitCatalog.some(u=>u.unit_id===unitId) || Object.values(previous.assignments).includes(unitId)) {
+        return send(409,{error:'Review the available tenants and units.'});
+      }
+      previous.assignments[tenantId] = unitId;
     } else if (body.action === 'approve') {
       if (session.role !== 'pm') return send(403, { error: 'Only the property manager can approve registrations.' });
       const registration = previous.registrations?.find(item => item.id === body.value);
@@ -257,8 +293,8 @@ const server = createServer(async (req, res) => {
       registration.approved = true;
     } else {
       if (body.action==='trigger' && session.role==='tenant' && !selected && !url.searchParams.has('case')) {
-        const owner=session.id.slice(5);
-        selected={...fresh(),id:previous.revision===0?'001':randomUUID(),owner,context:tenants[owner]};
+        const owner=ownerKey(session);
+        selected={...fresh(),id:previous.revision===0?'001':randomUUID(),owner,context:tenantContext(previous,session)};
         previous.cases.push(selected);
       }
       if (!selected) return send(403, {error:'This repair is unavailable for your account.'});

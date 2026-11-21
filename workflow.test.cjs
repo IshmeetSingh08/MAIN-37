@@ -32,8 +32,8 @@ test('scripted heating repair and separate invoice retain original references', 
   assert.equal(payload.contact_id, undefined);
   assert.equal(payload.resident_contact, undefined);
   send('partner', 'accept');
-  assert.throws(() => send('partner', 'slots', ['2026-11-22T09:00', '2026-11-22T09:30']), /at least one hour apart/);
-  send('partner', 'slots', ['2026-11-22T09:00', '2026-11-22T13:00']);
+  assert.throws(() => send('partner', 'slots', ['2090-11-22T09:00', '2090-11-22T09:30']), /at least one hour apart/);
+  send('partner', 'slots', ['2090-11-22T09:00', '2090-11-22T13:00']);
   send('tenant', 'book', 'slot_1');
   assert.throws(() => send('tenant', 'book', 'slot_2'), /case changed/);
   send('partner', 'complete', 'Replaced heating valve and tested the system.');
@@ -41,11 +41,13 @@ test('scripted heating repair and separate invoice retain original references', 
   assert.equal(state.invoice, undefined);
   assert.equal(state.result.maintenance_result.invoice_status, 'pending');
   assert.equal(state.result.maintenance_result.status, 'completed');
+  assert.throws(() => send('partner','invoice','145.00'), /Upload/);
+  send('partner','upload',{data:Buffer.from('%PDF-1.4').toString('base64')});
   send('partner', 'invoice', '145.00');
   assert.throws(() => send('partner', 'invoice', '145.00'), /case changed/);
   assert.equal(state.result.unit_id, 'unit_4b');
   assert.equal(state.result.maintenance_result.appointment.appointment_id, 'appt_001');
-  assert.equal(state.result.maintenance_result.invoice.invoice_number, 'INV-2026-501');
+  assert.equal(state.result.maintenance_result.invoice.invoice_number, 'INV-'+new Date().getUTCFullYear()+'-501');
 });
 
 test('rejection preserves the case and offers the job directly to the replacement', () => {
@@ -80,4 +82,62 @@ test('vague complaints reach manager review without automatically routing to a p
   send('pm','confirmHeating');
   send('pm','select','craft_001');
   assert.equal(state.stage,'offered');
+});
+
+test('clear descriptions skip follow-up and a manager can recover an exhausted boiler request', () => {
+  const state = fresh();
+  const send = (role,action,value) => apply(state,{role,action,value,revision:state.revision});
+  send('tenant','trigger','Only the bedroom radiator is cold. All the others work.');
+  assert.equal(state.stage,'summary');
+  assert.equal(state.summary.problem_type,'Single radiator not warming');
+  send('tenant','submit',state.summary.summary);
+  send('pm','clarify','What does the boiler display?');
+  send('tenant','reply','The boiler display shows an error.');
+  assert.deepEqual(state.recommendations.map(p=>p.id),['craft_002']);
+  send('pm','select','craft_002');
+  send('partner','reject','Fully booked');
+  send('pm','unavailable','Manager will check availability tomorrow.');
+  assert.match(view(state,'tenant').managerNote,/tomorrow/);
+  send('pm','clarify','Which radiator remains cold?');
+  send('tenant','reply','Only the bedroom radiator is cold.');
+  send('pm','select','craft_001');
+  assert.equal(state.attempts.length,2);
+});
+test('a tenant can request new slots and past dates cannot be proposed', () => {
+  const {state,send} = setup();
+  send('partner','accept');
+  assert.throws(()=>send('partner','slots',['2020-01-01T09:00','2020-01-01T12:00']),/future/);
+  send('partner','slots',['2090-01-10T09:00','2090-01-10T12:00']);
+  send('tenant','newSlots');
+  assert.equal(state.stage,'accepted');
+  assert.equal(state.slots,undefined);
+  send('partner','slots',['2090-01-11T09:00','2090-01-11T12:00']);
+  send('tenant','book','slot_2');
+  assert.equal(state.stage,'scheduled');
+});
+
+test('voice intake keeps its case and shares confirmed appointment details without the transcript', () => {
+  const state = fresh();
+  const send = (role,action,value) => apply(state,{role,action,value,revision:state.revision});
+  send('tenant','trigger',{method:'voice',description:'The bedroom radiator is cold, and I’m only home after four.'});
+  const eventId = state.trigger.event_id;
+  assert.equal(state.trigger.data.input_method,'voice');
+  assert.equal(state.stage,'summary');
+  assert.deepEqual(state.summary.details,{room:'bedroom',availableAfter:'16:00'});
+  send('tenant','submit','The bedroom radiator is cold. I am home after 17:30. Private note.');
+  send('pm','select','craft_001');
+  const offer = view(state,'partner').job.payload;
+  assert.equal(offer.service.affected_room,'bedroom');
+  assert.deepEqual(offer.scheduling,{preferred_start_from:'17:30',timezone:'Europe/Berlin'});
+  assert.equal(state.trigger.event_id,eventId);
+  assert(!JSON.stringify(offer).includes('Private note'));
+});
+
+test('visit preference parsing ignores symptom timestamps and ambiguous multiple windows', () => {
+  const { reportDetails } = require('./intake.cjs');
+  assert.equal(reportDetails('My radiator only gets cold after four.').availableAfter,undefined);
+  assert.equal(reportDetails('I am available after 4:30 p.m.').availableAfter,'16:30');
+  assert.equal(reportDetails('I am available after 9 in the morning.').availableAfter,'09:00');
+  assert.equal(reportDetails('I am available after 16:77.').availableAfter,undefined);
+  assert.equal(reportDetails('I am home after 4 or available after 6.').availableAfter,undefined);
 });

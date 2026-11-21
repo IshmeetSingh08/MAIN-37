@@ -21,7 +21,7 @@ exports.rankProviders = (specialisation, type, reviews = {}) => providers
     const rating = (provider.rating + ratings.reduce((sum, value) => sum + value, 0)) / (ratings.length + 1);
     return {
       ...provider, rating:Number(rating.toFixed(1)), reviewCount:ratings.length,
-      specialties: specialties[provider.id],
+      specialties: specialties[provider.id], matchedSpecialty: specialtyFor(type),
       score: Math.round(0.25 * provider.availableScore + 0.35 * (100 - 10 * provider.km)
         + 0.25 * rating * 20 + 0.15 * (200 - provider.estimate))
     };
@@ -34,12 +34,15 @@ exports.createJob = (request, attempt, context) => {
     id: request.id === 'req_001' ? 'job_' + (500 + attempt.number) : 'job_' + request.id + '_' + attempt.number,
     status: 'offered',
     payload: {
-      schema_version: '1.0', event_id: 'evt_offer_' + attempt.number,
+      schema_version: '1.0', event_id: 'evt_offer_' + request.id + '_' + attempt.number,
       idempotency_key: request.id + ':offer:' + attempt.number + ':v1',
       correlation_id: 'corr_' + request.id, request_id: request.id,
       unit_id: context.unit_id, partner_provider_id: attempt.provider.id,
       created_at: new Date().toISOString(),
-      service: { category:'heating', summary:request.summary.problem_type },
+      service: { category:'heating', summary:request.summary.problem_type, affected_room:request.summary.details?.room },
+      ...(request.summary.details?.availableAfter ? {
+        scheduling:{preferred_start_from:request.summary.details.availableAfter, timezone:'Europe/Berlin'}
+      } : {}),
       property_context: { address: context.address, unit_label: context.unit_label },
       attachments: []
     }
@@ -61,14 +64,18 @@ exports.proposeSlots = (inputs) => {
       Number.isFinite(time) && berlin.format(time).replace(' ', 'T') === value);
     return candidates.length === 1 ? candidates[0] : NaN;
   });
-  if (starts.some(time => !Number.isFinite(time)) || Math.abs(starts[0] - starts[1]) < 3600000) return null;
+  if (starts.some(time => !Number.isFinite(time) || time <= Date.now()) || Math.abs(starts[0] - starts[1]) < 3600000) return null;
   return starts.sort((a,b) => a-b).map((time,index) => ({
     id: 'slot_' + (index + 1), start: new Date(time).toISOString(), end: new Date(time + 3600000).toISOString()
   }));
 };
 exports.confirmAppointment = (slot, id = '001') => ({ ...slot, appointment_id: 'appt_' + id, status: 'confirmed', timezone: 'Europe/Berlin' });
 exports.complete = (work, id = '001') => ({ report_id: id==='001'?'report_501':'report_'+id, work_done: work, completed_at: new Date().toISOString() });
-exports.submitInvoice = (job, amount) => ({
-  invoice_id: 'inv_' + job.id.slice(4), invoice_number: 'INV-2026-' + job.id.slice(4), amount, currency: 'EUR',
-  issued_at: '2026-11-22', status: 'submitted', document_ref: 'mock://invoices/inv_501', partner_job_id: job.id
-});
+exports.submitInvoice = (job, amount, caseId) => {
+  const issued = new Date().toISOString();
+  return {
+    invoice_id:'inv_' + job.id.slice(4), invoice_number:'INV-' + issued.slice(0,4) + '-' + job.id.slice(4),
+    amount, currency:'EUR', issued_at:issued, status:'submitted',
+    document_ref:'/api/demo/invoice?case=' + encodeURIComponent(caseId), partner_job_id:job.id
+  };
+};
