@@ -13,7 +13,8 @@ p+p{margin-top:.6rem}
 .hero h1{font-size:clamp(2.6rem,5.6vw,6rem);line-height:1.02;margin:.9rem 0 1.2rem;letter-spacing:-.067em}.intro>p:last-child{max-width:31rem;color:var(--muted)}
 .eyebrow{font-size:.68rem;letter-spacing:.16em;font-weight:700;color:var(--muted)}.hero .eyebrow{display:inline-block;border:1px solid var(--line);padding:.3rem .8rem;border-radius:30px;background:#ffffff70;color:var(--green)}
 .map{position:relative;max-width:620px;justify-self:center;width:100%}.map img{width:100%;display:block}
-.pin{position:absolute;transform:translate(-50%,-50%);font-size:.74rem;font-weight:650;text-decoration:none;background:#fffffff0;border:1px solid var(--line);border-radius:8px;padding:.25rem .55rem;white-space:nowrap}.pin.home{left:37%;top:48%}.pin.hq{left:67%;top:36%}.pin.shop{left:67%;top:72%}
+.pin{position:absolute;transform:translate(-50%,-50%);font-size:.74rem;font-weight:650;text-decoration:none;background:#fffffff0;border:1px solid var(--line);border-radius:8px;padding:.25rem .55rem;white-space:nowrap}.pin.home{left:37%;top:48%}.pin.shop{left:67%;top:72%}
+.pin.hq{left:66.125%;top:18.8%;transform:translate(-50%,calc(-100% - .5rem))}
 .role-section{background:white;padding:3.2rem max(2vw,20px) 2.4rem}.role-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.4rem}.role-heading p,.account-grid p,.muted{color:var(--muted)}.role-heading p{font-size:.85rem}
 .account-grid,.providers,.metrics{display:grid;gap:.85rem;grid-template-columns:repeat(3,minmax(0,1fr))}
 .account-grid article,.providers article,.metric,.outcome,.content,.account-box{border:1px solid var(--line);background:var(--white);border-radius:15px;padding:1.2rem}

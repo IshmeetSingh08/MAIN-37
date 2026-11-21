@@ -51,6 +51,7 @@ function unitRecord(s, download) {
 
 const VoiceRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
+let followUpSpeech;
 function voiceForm(action,label,submit) {
   const answer = action === 'answer';
   const micLabel = answer ? 'Speak your answer' : 'Use microphone';
@@ -60,7 +61,6 @@ function voiceForm(action,label,submit) {
     +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v1a6 6 0 0 0 12 0v-1m-6 7v3m-3 0h6"/></svg></button>'
     +'</div>'
     +'<p class="muted voice-note">Speak in English. Your browser may process audio online. Review the text before continuing.</p><p role="status" class="voice-status"></p>'
-    +(answer && window.speechSynthesis ? '<button type="button" class="quiet" data-read-question>Read question aloud</button>' : '')
     +'<button type="submit" class="primary">'+submit+'</button></form>';
 }
 function reportFields(details) {
@@ -315,7 +315,7 @@ function refresh(data) {
 }
 async function update(action,value) {
   if (busy || recognition) return;
-  if (['answer','revise','reset'].includes(action)) window.speechSynthesis?.cancel();
+  if (['answer','revise','reset'].includes(action)) cancelFollowUp();
   busy=true;
   panel.parentElement.insertBefore(error,panel);
   panel.setAttribute('aria-busy','true');
@@ -368,7 +368,7 @@ function handleVoice(control) {
     status.textContent = 'Microphone dictation is unavailable in this browser. You can type here.';
     return;
   }
-  window.speechSynthesis?.cancel();
+  cancelFollowUp();
   const mic = new VoiceRecognition();
   recognition = mic;
   mic.lang = 'en-GB';
@@ -377,7 +377,7 @@ function handleVoice(control) {
   status.textContent = 'Starting microphone…';
   control.title = 'Stop listening';
   control.setAttribute('aria-pressed','true');
-  const actions = form.querySelectorAll('[type="submit"], [data-read-question], [data-action="answer"]');
+  const actions = form.querySelectorAll('[type="submit"], [data-action="answer"]');
   actions.forEach(button => { button.disabled = true; });
   function finish() {
     if (recognition !== mic) return;
@@ -419,24 +419,52 @@ function showSlotPreference(form) {
   });
   form.querySelector('.slot-feedback').textContent = earlier ? 'At least one option is earlier than the tenant’s preferred time.' : '';
 }
+function cancelFollowUp() {
+  if (!followUpSpeech) return;
+  followUpSpeech = undefined;
+  window.speechSynthesis.cancel();
+}
 function readIntakeQuestion() {
   const question = document.querySelector('#intake-question');
-  if (!question || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
-  window.speechSynthesis.cancel();
+  const control = panel.querySelector('form[data-action="answer"] [data-voice]');
+  if (!question || !control || document.hidden) return;
+  const status = control.form.querySelector('.voice-status');
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    status.textContent = 'Read the question above, then tap the microphone or type your answer.';
+    return;
+  }
+  cancelFollowUp();
   const speech = new SpeechSynthesisUtterance(question.textContent);
   speech.lang = 'en-GB';
-  window.speechSynthesis.speak(speech);
+  followUpSpeech = speech;
+  status.textContent = 'Reading the question… The microphone will start afterward.';
+  speech.onend = () => {
+    if (followUpSpeech !== speech) return;
+    followUpSpeech = undefined;
+    if (!control.isConnected || recognition) return;
+    if (document.hidden) {
+      status.textContent = 'Tap the microphone or type your answer.';
+      return;
+    }
+    handleVoice(control);
+  };
+  speech.onerror = () => {
+    if (followUpSpeech !== speech) return;
+    followUpSpeech = undefined;
+    status.textContent = 'Could not read the question aloud. Tap the microphone or type your answer.';
+  };
+  try { window.speechSynthesis.speak(speech); }
+  catch { speech.onerror(); }
 }
 window.addEventListener('pagehide', () => {
+  cancelFollowUp();
   recognition?.abort();
-  window.speechSynthesis?.cancel();
 });
 
 document.addEventListener('click',event=>{
   const control=event.target.closest('button');
   if (!control) return;
   if (control.dataset.voice) handleVoice(control);
-  if (control.hasAttribute('data-read-question')) readIntakeQuestion();
   if (control.dataset.preferredSlots) {
     const berlinDate = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin',dateStyle:'short'});
     const today = Date.parse(berlinDate.format(new Date())+'T00:00:00Z');
@@ -512,7 +540,7 @@ window.addEventListener('pageshow', event => {
 update();
 let checkingForUpdates = false;
 async function checkForUpdates() {
-  if (document.hidden || busy || recognition || !state || checkingForUpdates) return;
+  if (document.hidden || busy || recognition || followUpSpeech || !state || checkingForUpdates) return;
   checkingForUpdates = true;
   try {
     const response = await fetch(apiUrl());
@@ -520,7 +548,7 @@ async function checkForUpdates() {
     if (!response.ok) return;
     const latest=await response.json();
     if (latest.role !== state.role || latest.accountKey !== state.accountKey) return location.reload();
-    if (!busy && !recognition && latest.revision > state.revision) refresh(latest);
+    if (!busy && !recognition && !followUpSpeech && latest.revision > state.revision) refresh(latest);
   } catch {
     // Keep the last known action list until the server can be reached again.
   } finally {

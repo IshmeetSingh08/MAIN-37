@@ -52,6 +52,6 @@ See [CONNECTOR_SPEC.md](CONNECTOR_SPEC.md) for the simulated integration contrac
 
 ## Voice report demo
 
-On the tenant report screen, select the microphone icon, allow browser microphone access, and say “The bedroom radiator is cold, and I’m only home after four.” The transcript goes into the ordinary report box for review. Continue to see the room and 16:00 Berlin-time preference. If the issue is unclear, the portal reads one follow-up aloud where speech playback is supported. Select the microphone icon beside the answer to dictate a reply. Typing remains available.
+On the tenant report screen, select the microphone icon, allow browser microphone access, and say “The bedroom radiator is cold, and I’m only home after four.” The transcript goes into the ordinary report box for review. Continue to see the room and 16:00 Berlin-time preference. If a spoken report needs a follow-up, the portal reads the question and starts the microphone after playback. If the browser blocks either step, use the microphone icon or type your reply.
 
 The craftsman sees the confirmed room and preferred start time. After accepting, **Suggest matching times** fills two editable future options. The tenant still chooses the appointment in the portal. The app stores text and structured details, while the browser may use an online service to transcribe audio. Dictation uses English.
