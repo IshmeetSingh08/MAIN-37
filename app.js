@@ -1,4 +1,4 @@
-﻿const panel = document.querySelector('#panel');
+const panel = document.querySelector('#panel');
 const error = document.querySelector('#error');
 const notificationPanel = document.querySelector('#notifications');
 const notificationLink = document.querySelector('#notification-link');
@@ -106,14 +106,37 @@ function propertyCase(s) {
   const followUp = none ? '<h3>No specialist available</h3>'+(s.stage!=='unavailable' ? form('unavailable','Next step for the tenant','Your property manager is checking specialist availability.','Send status to tenant') : '<p>'+html(s.managerNote)+'</p>') : '';
   const best = available[0];
   const why = best ? '<details><summary>Why this craftsman?</summary><p>'+html(best.name)+' matches '+html(best.matchedSpecialty.toLowerCase())+'. '+(available.length===1?'This is the only available ranked specialist for this issue.':'Among eligible specialists, this provider has the highest weighted score.')+'</p><p>Distance (35%), availability (25%), rating (25%) and estimate (15%) determine the score.</p></details>' : '';
-  return summary+followUp+'<h3>Ranked fictional providers</h3><p>Filtered by repair specialty, then scored by availability, distance, rating and estimated cost.</p><div class="providers">'+s.recommendations.map((item,index)=>'<article><span class="pill">Rank '+(index+1)+' · Score '+item.score+'</span><h3>'+html(item.name)+'</h3><p>'+html(item.specialties?.join(' · '))+'</p><p>'+html(item.availability)+' · '+item.km+' km · '+item.rating+'/5 '+(item.reviewCount?'('+item.reviewCount+' tenant '+(item.reviewCount===1?'rating':'ratings')+')':'(demo baseline)')+' · €'+item.estimate+' estimate</p>'+(item===best?why:'')+select(item)+'</article>').join('')+'</div>'
+  return summary+followUp+'<h3>Ranked fictional providers</h3><p>Filtered by repair specialty, then scored by availability, distance, rating and estimated cost.</p><div class="providers ranked-providers">'+s.recommendations.map((item,index)=>'<article><div><span class="pill">Rank '+(index+1)+' · Score '+item.score+'</span><h3>'+html(item.name)+'</h3><p>'+html(item.specialties?.join(' · '))+'</p><p>'+html(item.availability)+' · '+item.km+' km · '+item.rating+'/5 '+(item.reviewCount?'('+item.reviewCount+' tenant '+(item.reviewCount===1?'rating':'ratings')+')':'(demo baseline)')+' · €'+item.estimate+' estimate</p></div><div>'+select(item)+'</div>'+(item===best?why:'')+'</article>').join('')+'</div>'
     +(approved.length?'<h3>Approved heating repair registrations</h3><p>These providers have no ranking data yet.</p>'+approved.map(item=>'<p>'+html(item.name)+' '+select(item)+'</p>').join(''):'')+history+ask;
 }
 
 const finished = stage => ['completed','invoiced'].includes(stage);
 const needsManager = stage => ['review','rejected','consent','unavailable'].includes(stage);
+const craftsmanSteps = {offered:'Awaiting your response',accepted:'Propose appointment times',slots:'Awaiting tenant confirmation',scheduled:'Appointment booked'};
 function caseList(items, path, status = true) {
-  return items.length ? '<div class="case-list">'+items.map(item=>'<a href="'+path+'?case='+encodeURIComponent(item.id)+'"><span><strong>'+html(item.title)+'</strong><small>'+html(item.address)+' · '+html(item.unit)+'</small></span>'+(status?'<span class="pill">'+html(statusLabels[item.stage])+'</span>':'')+'<span aria-hidden="true">→</span></a>').join('')+'</div>' : '<p class="muted">No requests here yet.</p>';
+  return items.length ? '<div class="case-list">'+items.map(item=>'<a href="'+path+'?case='+encodeURIComponent(item.id)+'"><span><strong>'+html(item.title)+'</strong><small>'+html(item.address)+' · '+html(item.unit)+'</small>'+(path==='/craftsman' && item.appointment?'<small>'+html(slot(item.appointment))+' · Berlin time</small>':'')+'</span>'+(status?'<span class="pill">'+html((path==='/craftsman' && craftsmanSteps[item.stage]) || statusLabels[item.stage])+'</span>':'')+'<span aria-hidden="true">→</span></a>').join('')+'</div>' : '<p class="muted">No requests here yet.</p>';
+}
+function craftsmanView() {
+  const view = new URLSearchParams(location.search).get('view');
+  return ['pending','completed'].includes(view) ? view : 'overview';
+}
+function craftsmanOverview(cases) {
+  const active = craftsmanView();
+  const ongoing = cases.filter(item=>['accepted','slots','scheduled'].includes(item.stage));
+  const completed = cases.filter(item=>finished(item.stage));
+  const pending = cases.filter(item=>['offered','accepted','slots','scheduled','completed'].includes(item.stage));
+  if (active!=='overview') {
+    const items = active==='completed' ? completed : pending;
+    const heading = active==='completed' ? 'Completed repairs' : 'Pending tasks';
+    return '<section class="content job-group" aria-label="'+heading+'"><h2>'+heading+'</h2>'
+      +(items.length?caseList(items.slice().reverse(),'/craftsman'):'<p class="muted">'+(active==='completed'?'No completed repairs yet.':'No outstanding tasks.')+'</p>')+'</section>';
+  }
+  const nextVisit = ongoing.filter(item=>item.appointment && Date.parse(item.appointment.start)>Date.now())
+    .sort((a,b)=>Date.parse(a.appointment.start)-Date.parse(b.appointment.start))[0];
+  const metrics = [['Ongoing jobs',ongoing.length],['Pending tasks',pending.length],['Completed repairs',completed.length]];
+  return '<h2>Jobs overview</h2>'+(!pending.length&&!completed.length?'<div class="status"><strong>No assigned jobs</strong></div>':'')
+    +'<div class="metrics job-metrics">'+metrics.map(([label,count])=>'<div class="metric"><span>'+label+'</span><strong>'+count+'</strong></div>').join('')+'</div>'
+    +'<section class="content job-group"><h3>Next booked visit</h3>'+(nextVisit?caseList([nextVisit],'/craftsman'):'<p class="muted">No upcoming visits booked.</p>')+'</section>';
 }
 function pm(s) {
   const path = location.pathname;
@@ -136,7 +159,7 @@ function pm(s) {
     const items=s.cases.filter(item=>item.propertyId===property.id);
     const section=(heading, done)=>'<h3>'+heading+'</h3>'+caseList(items.filter(item=>finished(item.stage)===done),'/property-manager/tasks')+
       '<p class="muted">Read-only examples</p><ul>'+property.tasks.filter(item=>(item.status==='Completed')===done).map(item=>'<li>'+html(item.title+' · '+item.status)+'</li>').join('')+'</ul>';
-    return '<a href="/property-manager">← Portfolio</a><h2>'+html(property.name)+'</h2><p>'+html(property.address+' · '+property.heating)+'</p>'+section('Requests',false)+section('Repair history',true);
+    return '<a class="request-back" href="/property-manager"><span aria-hidden="true">←</span> Back to portfolio</a><h2>'+html(property.name)+'</h2><p>'+html(property.address+' · '+property.heating)+'</p>'+section('Requests',false)+section('Repair history',true);
   }
   const needs = active.filter(item=>needsManager(item.stage));
   const cards=s.properties.map(property=>{
@@ -224,7 +247,7 @@ function timeline(stage) {
 
 function ratingCard(value) {
   const heading = '<h3>How was the repair?</h3>';
-  if (value) return '<section class="rating-card">'+heading+'<span class="rating-saved" aria-hidden="true">'+ '★'.repeat(value)+'☆'.repeat(5-value)+'</span><p>Your rating: '+value+'/5</p></section>';
+  if (value) return '<section class="rating-card rating-card-saved"><div><h3>Thanks for your feedback</h3><div class="rating-saved" role="img" aria-label="'+value+' out of 5 stars"><span aria-hidden="true">'+ '★'.repeat(value)+'</span><span class="rating-unfilled" aria-hidden="true">'+ '☆'.repeat(5-value)+'</span></div></div></section>';
   const stars = [1,2,3,4,5].map(n=>'<label class="star-choice"><input type="radio" name="value" value="'+n+'" required aria-label="'+n+' out of 5 stars"><span aria-hidden="true">★</span></label>').join('');
   return '<section class="rating-card">'+heading+'<p>Optional feedback helps rank craftsmen for future repairs.</p><form data-action="rate"><fieldset><legend class="sr-only">Rate this repair</legend><div class="star-row">'+stars+'</div></fieldset><button class="primary">Submit rating</button></form></section>';
 }
@@ -233,13 +256,17 @@ function render() {
   const s=state;
   const role=s.role;
   document.querySelector('#active-link').hidden = role!=='pm';
-  document.querySelector('.mobile-menu').hidden = role!=='pm';
+  document.querySelector('.mobile-menu').hidden = role==='tenant';
+  document.querySelectorAll('.craftsman-link').forEach(link=>{link.hidden=role!=='partner';});
   document.querySelectorAll('.manager-link').forEach(link=>{link.hidden=role!=='pm';});
   const overview=document.querySelector('#overview-link');
   overview.href=role==='pm'?'/property-manager':role==='tenant'?'/tenant':'/craftsman';
-  overview.textContent=role==='pm'?'Portfolio':role==='tenant'?'Report an issue':'Jobs';
+  overview.textContent=role==='pm'?'Portfolio':role==='tenant'?'Report an issue':'Overview';
   document.querySelectorAll('.sidebar nav a').forEach(link=>{
-    if (link.pathname===location.pathname) link.setAttribute('aria-current','page');
+    const current = role==='partner'
+      ? !link.hidden && (new URLSearchParams(link.search).get('view') ?? 'overview')===craftsmanView()
+      : link.pathname===location.pathname;
+    if (current) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');
   });
   document.querySelector('#reset').hidden = !s.demo;
@@ -268,7 +295,10 @@ function render() {
     const metrics='<div class="metrics">'+[['Open requests',active.length],['Active jobs',active.filter(item=>['offered','accepted','slots','scheduled'].includes(item.stage)).length],['Completed repairs',s.cases.filter(item=>finished(item.stage)).length]].map(([label,count])=>'<div class="metric"><span>'+label+'</span><strong>'+count+'</strong></div>').join('')+'</div>';
     panel.innerHTML=(home?metrics:'')+(detail?context+'<div class="status"><strong>'+status+'</strong></div>':'')+'<div class="content'+(home?' portfolio-content':'')+'">'+pm(s)+(detail?(s.result?unitRecord(s,download):outcome+download):'')+'</div>';
   } else {
-    panel.innerHTML='<h2>Assigned jobs</h2>'+caseList(s.cases,'/craftsman')+'<div class="status"><strong>'+status+'</strong></div><div class="content">'+partner(s)+outcome+download+'</div>';
+    const detail = new URLSearchParams(location.search).has('case') && s.job;
+    panel.innerHTML=detail
+      ? '<a class="request-back" href="/craftsman"><span aria-hidden="true">←</span> Back to overview</a><div class="status"><strong>'+status+'</strong></div><div class="content">'+partner(s)+outcome+download+'</div>'
+      : craftsmanOverview(s.cases);
   }
 }
 
@@ -502,6 +532,12 @@ document.addEventListener('pointerdown',event => {
 });
 document.addEventListener('keydown',event => {
   if (event.key==='Escape' && !notificationPanel.hidden) closeNotifications(true);
+});
+panel.addEventListener('keydown',event => {
+  if (event.key!=='Enter' || event.shiftKey || event.isComposing || event.repeat) return;
+  if (!event.target.matches('form[data-action="trigger"] textarea, form[data-action="answer"] textarea')) return;
+  event.preventDefault();
+  if (!recognition && !busy) event.target.form.requestSubmit();
 });
 panel.addEventListener('submit',async event=>{
   event.preventDefault();

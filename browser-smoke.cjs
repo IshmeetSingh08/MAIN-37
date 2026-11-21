@@ -38,10 +38,14 @@ async function main() {
       await page.locator('#active-link').click();
       await page.locator('.case-list a').first().click();
     };
-    const craftsman = () => login('Craftsman', 'Müller Heiztechnik', '/craftsman');
+    const craftsman = async () => {
+      await login('Craftsman', 'Müller Heiztechnik', '/craftsman');
+      await page.getByRole('link',{name:'Pending tasks',exact:true}).click();
+      await page.locator('.job-group .case-list a').first().click();
+    };
     const report = async () => {
       await page.locator('textarea').fill('All the rooms are freezing even with the dial turned up.');
-      await click('Continue');
+      await page.locator('textarea').press('Enter');
       await page.getByRole('heading',{name:'Review your issue summary'}).waitFor();
       await page.getByText('Tenant report received', {exact:true}).waitFor();
 
@@ -85,6 +89,13 @@ async function main() {
     await craftsman();
     await click('Submit report and complete repair');
     await status('Task completed — invoice pending');
+    await page.getByRole('link',{name:'Back to overview'}).click();
+    await page.getByRole('link',{name:'Completed repairs',exact:true}).click();
+    await page.getByRole('region',{name:'Completed repairs'}).getByText('Task completed — invoice pending').waitFor();
+    await page.getByRole('link',{name:'Pending tasks',exact:true}).click();
+    const invoicePending = page.getByRole('region',{name:'Pending tasks'}).getByRole('link').first();
+    await invoicePending.getByText('Task completed — invoice pending').waitFor();
+    await invoicePending.click();
     await page.getByRole('button', { name: /Notifications/ }).click();
     await page.locator('#notifications').getByText(/outstanding invoice/).waitFor();
     await manager();
@@ -106,7 +117,7 @@ async function main() {
     assert.equal((await download.body()).toString(),'%PDF-1.4\n%%EOF');
     await page.getByRole('radio',{name:'5 out of 5 stars'}).check();
     await click('Submit rating');
-    await page.getByText('Your rating: 5/5').waitFor();
+    await page.getByRole('img',{name:'5 out of 5 stars',exact:true}).waitFor();
     await page.getByText('View simulated Unit 4B write-back').click();
     await page.locator('pre').getByText(/INV-\d{4}-/).waitFor();
     await page.reload();
@@ -128,6 +139,8 @@ async function main() {
     await manager();
     await click('Select provider', page.locator('article').filter({ hasText: 'WärmeFix GmbH' }));
     await login('Craftsman', 'WärmeFix GmbH', '/craftsman');
+    await page.getByRole('link',{name:'Pending tasks',exact:true}).click();
+    await page.getByRole('region',{name:'Pending tasks'}).getByRole('link').first().click();
     await status('Job offered');
     await page.getByText('Property details').click();
     await page.locator('dl').getByText(/Musterstraße 12/).waitFor();
