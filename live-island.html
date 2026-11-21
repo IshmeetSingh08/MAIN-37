@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live island · Centrix City</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/live-island.js"></script>
+  <style>
+    .island-main {max-width:1150px;margin:auto;padding:1.5rem 1rem 2rem}
+    .island-header {display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:end}
+    .island-header select {display:block;max-width:100%;padding:.5rem;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink)}
+    .island-scene {display:grid;grid-template-columns:minmax(0,1.6fr) minmax(230px,1fr);gap:1.25rem;align-items:center;margin-top:1rem;padding:clamp(.75rem,3vw,2rem);border:1px solid var(--line);border-radius:24px;background:radial-gradient(ellipse at 28% 55%,#cce7dd,transparent 75%),#f8faf7}
+    .island-scene .map {max-width:none}
+    .landmark {position:absolute;transform:translate(-50%,-50%);padding:.28rem .5rem;border:1px solid var(--line);border-radius:999px;background:white;white-space:nowrap;font-size:clamp(.66rem,1.6vw,.9rem);font-weight:700}
+    #tenant-landmark {left:37%;top:48%}
+    #manager-landmark {left:66.125%;top:18.8%;transform:translate(-50%,calc(-100% - .45rem))}
+    #partner-landmark {left:67%;top:72%}
+    .landmark[aria-current="true"] {background:var(--green);color:white;border-color:var(--green);box-shadow:0 0 0 5px #44987848;animation:handoff .7s ease-out}
+    @keyframes handoff {from {box-shadow:0 0 0 1px #44987875} to {box-shadow:0 0 0 12px #44987800}}
+    .island-status {padding:1.3rem;border:1px solid var(--line);border-radius:16px;background:white;overflow-wrap:anywhere}
+    .island-status h2 {margin:.5rem 0}
+    .island-message {margin-top:.75rem}
+    @media(max-width:700px) {.island-scene {grid-template-columns:minmax(0,1fr)}}
+    @media(prefers-reduced-motion:reduce) {.landmark[aria-current="true"] {animation:none}}
+  </style>
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="/property-manager"><b aria-hidden="true">C</b>CENTRIX CITY</a><a class="quiet" href="/property-manager">Back to portfolio</a></header>
+  <main class="island-main">
+    <div class="island-header">
+      <div><h1>Live repair island</h1><p class="muted">Follow the repair from the first report to the final invoice.</p></div>
+      <label>Repair to follow<select id="island-case"><option value="">Latest report</option></select></label>
+    </div>
+    <div class="island-scene">
+      <div class="map" aria-label="Repair handoff map">
+        <img src="/island.svg" alt="Island with an apartment building, property manager's office and craftsman workshop">
+        <span class="landmark" id="tenant-landmark">Tenant</span>
+        <span class="landmark" id="manager-landmark">Property Manager</span>
+        <span class="landmark" id="partner-landmark">Craftsman</span>
+      </div>
+      <section class="island-status" aria-live="polite">
+        <p class="eyebrow" id="island-owner">REPAIR STATUS</p>
+        <h2 id="island-stage">Waiting for a report</h2>
+        <p id="island-next">A repair will appear when the tenant submits a report.</p>
+      </section>
+    </div>
+    <p id="island-error" class="muted island-message" role="status" hidden></p>
+  </main>
+</body>
+</html>

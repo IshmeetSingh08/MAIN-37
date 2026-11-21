@@ -33,7 +33,7 @@ function current() {
   return { revision:saved.revision, registrations:saved.registrations ?? [],
     cases:saved.stage==='ready'?[]:[{...saved,id:'001',owner:'tenant',context:tenants.tenant}] };
 }
-const assets = { '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/island.svg': ['island.svg', 'image/svg+xml'] };
+const assets = { '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/island.svg': ['island.svg', 'image/svg+xml'], '/live-island.js': ['live-island.js', 'text/javascript'] };
 const dashboardPaths = [...Object.values(accounts).map(account => account.path), '/tenant/repair', '/property-manager/tasks', '/property-manager/appointments', '/property-manager/craftsmen'];
 const page = (name) => readFileSync(join(__dirname, name), 'utf8');
 const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({
@@ -121,6 +121,17 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     const session = auth.read(req.headers.cookie);
+    if (req.method === 'GET' && url.pathname === '/property-manager/island') {
+      if (!session) return redirect('/demo/login?role=pm');
+      if (session.role !== 'pm') return redirect(accounts[session.role].path);
+      return html(page('live-island.html'));
+    }
+    if (req.method === 'GET' && url.pathname === '/api/demo/island') {
+      if (session?.role !== 'pm') return send(session ? 403 : 401, {error:'Property manager access required.'});
+      return send(200, {cases:current().cases.filter(item=>item.request && item.context?.unit_label).map(item=>({
+        id:item.id, unit:item.context.unit_label, stage:item.stage
+      }))});
+    }
     if (req.method === 'POST' && (req.headers['sec-fetch-site'] === 'cross-site' ||
         (req.headers.origin && req.headers.origin !== 'http://' + req.headers.host))) {
       return send(403, { error: 'Open CENTRIX CITY directly to perform this action.' });
